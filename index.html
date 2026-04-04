@@ -1,0 +1,215 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <title>ニュース速報(VIP)＠2ch掲示板 (外部うｐ・URL展開版)</title>
+    <style>
+        /* --- VIP壁紙の再現 --- */
+        body { 
+            background-color: #E0FFE0; 
+            background-image: 
+                linear-gradient(90deg, rgba(200,255,200,.5) 50%, transparent 50%),
+                linear-gradient(rgba(200,255,200,.5) 50%, transparent 50%);
+            background-size: 4px 4px; 
+            font-family: "MS PGothic", "ＭＳ Ｐゴシック", "IPAMonaPGothic", sans-serif; 
+            margin: 0; padding: 20px;
+            display: flex; flex-direction: column; align-items: center;
+        }
+
+        #main-container { width: 100%; max-width: 900px; }
+
+        .board-header {
+            background: linear-gradient(to bottom, #32CD32, #008000); 
+            color: #ffff00; border: 2px solid #006400; border-radius: 2px;
+            padding: 15px; margin-bottom: 10px; text-align: center;
+            box-shadow: 3px 3px 0px rgba(0,0,0,0.2);
+        }
+        .banner-inner { display: flex; justify-content: space-around; align-items: center; }
+        .banner-main-title { font-size: 2.2em; font-weight: bold; text-shadow: 2px 2px 0px #000; letter-spacing: 2px; }
+        .banner-sub-text { font-size: 0.85em; color: #fff; margin-top: 5px; }
+        .aa-chara { font-size: 2.8em; color: #fff; line-height: 1; }
+
+        .local-rule {
+            background-color: rgba(204, 255, 204, 0.9);
+            border: 1px solid #77aa77; padding: 15px; margin-bottom: 20px;
+            font-size: 0.85em; color: #004400;
+        }
+        .rule-title { font-weight: bold; color: #CC3300; font-size: 1.1em; border-bottom: 1px solid #77aa77; margin-bottom: 5px; }
+
+        .thread-list-box { background: rgba(255,255,255,0.9); border: 1px solid #ccc; padding: 15px; margin-bottom: 20px; }
+        .thread-link { display: block; color: #0000ff; margin: 5px 0; cursor: pointer; text-decoration: underline; font-size: 0.95em; }
+        .thread-link:hover { color: #ff0000; background: #ffffcc; }
+
+        .thread-view { background: rgba(255,255,255,0.95); border: 1px solid #999; padding: 20px; min-height: 400px; }
+        .thread-title { color: #ff0000; font-size: 1.5em; margin: 0 0 15px 0; border-bottom: 1px solid #ccc; padding-bottom: 5px; }
+        .post { margin-bottom: 1.5em; border-bottom: 1px dashed #bbb; padding-bottom: 12px; }
+        .meta { color: #117743; font-size: 0.95em; }
+        .meta b { color: #000080; }
+        .message { margin-top: 8px; white-space: pre-wrap; font-size: 16px; color: #000; line-height: 1.4; }
+        
+        .external-img { max-width: 400px; max-height: 500px; display: block; margin-top: 10px; border: 1px solid #ccc; background: #fff; }
+
+        .back-link { color: blue; cursor: pointer; font-weight: bold; text-decoration: underline; margin-bottom: 15px; display: inline-block; background: #fff; padding: 2px 5px; border: 1px solid #ccc; }
+
+        .form-container { background: #f8f8f8; border: 1px solid #ccc; padding: 15px; margin-top: 30px; }
+        .form-row { margin-bottom: 8px; font-size: 0.9em; }
+        input[type="text"] { border: 1px solid #aaa; padding: 2px; }
+        textarea { width: 100%; height: 100px; margin-top: 5px; border: 1px solid #aaa; font-family: inherit; }
+        .submit-btn { padding: 4px 20px; cursor: pointer; background: #f0f0f0; border: 1px solid #aaa; font-weight: bold; }
+        
+        .uploader-link { font-size: 0.8em; color: #666; text-decoration: underline; margin-left: 10px; }
+        .reset-btn { margin-top: 20px; font-size: 0.7em; color: #666; cursor: pointer; background: none; border: none; text-decoration: underline; }
+    </style>
+</head>
+<body>
+
+<div id="main-container">
+    <div id="content-area"></div>
+    <div style="text-align:right;"><button class="reset-btn" onclick="resetAll()">全データを消去してリセットする</button></div>
+</div>
+
+<script>
+    const myID = Math.random().toString(36).substring(2, 10).toUpperCase();
+    const boardName = "ニュース速報(VIP)";
+    
+    // スレッドデータ取得
+    let threads = JSON.parse(localStorage.getItem('vip_threads_ext')) || [];
+
+    function saveData() {
+        try {
+            localStorage.setItem('vip_threads_ext', JSON.stringify(threads));
+        } catch (e) {
+            console.error("Save failed");
+        }
+    }
+
+    function resetAll() {
+        if(confirm("すべて消去しますか？")) {
+            threads = [];
+            saveData();
+            showBoardTop();
+        }
+    }
+
+    // 本文内のURLを画像タグに置換する関数
+    function parseMessage(msg) {
+        // 画像URL（jpg, png, gif, webp）を判定する正規表現
+        const imgReg = /(https?:\/\/[\w\/:%#\$&\?\(\)~\.=\+\-]+(?:\.jpg|\.jpeg|\.png|\.gif|\.webp))/gi;
+        return msg.replace(imgReg, (url) => {
+            return `${url}\n<img src="${url}" class="external-img" onerror="this.style.display='none'">`;
+        });
+    }
+
+    function showBoardTop() {
+        const area = document.getElementById('content-area');
+        let html = `
+            <div class="board-header">
+                <div class="banner-inner">
+                    <div class="aa-chara">（　´∀｀）</div>
+                    <div class="banner-text">
+                        <div class="banner-main-title">${boardName}</div>
+                        <div class="banner-sub-text">〜 ハッキングから今晩のおかずまで 〜</div>
+                    </div>
+                    <div class="aa-chara">（ﾟ∀ﾟ　）</div>
+                </div>
+            </div>
+            <div class="local-rule">
+                <div class="rule-title">${boardName}板 ローカルルール</div>
+                ハッキングから今晩のおかずまでカバーする掲示板をようこそ！<br>
+                
+                <a href="https://gigafile.nu/" target="_blank" class="uploader-link">ギガファイル便を開く</a>
+            </div>
+            <div class="thread-list-box">
+                <h2 style="font-size:1em; margin-top:0; color:#006600;">■スレッド一覧</h2>
+        `;
+
+        if (threads.length === 0) {
+            html += `<p style="font-size:0.85em; color:#666;">スレ立てろよ</p>`;
+        } else {
+            threads.forEach((th, i) => {
+                html += `<a class="thread-link" onclick="showThread(${i})">${i + 1}: ${th.title} (${th.posts.length})</a>`;
+            });
+        }
+        html += `</div>`;
+
+        html += `
+            <div class="form-container">
+                <div style="font-weight:bold; margin-bottom:10px;">新規スレッド作成</div>
+                <div class="form-row">タイトル：<input type="text" id="new-title" style="width:70%"></div>
+                <div class="form-row">名前：<input type="text" id="new-name" placeholder=""></div>
+                <textarea id="new-msg" placeholder=""></textarea><br>
+                <button class="submit-btn" onclick="createNewThread()">新規スレッドを作成する</button>
+            </div>
+        `;
+        area.innerHTML = html;
+        window.scrollTo(0,0);
+    }
+
+    function showThread(index) {
+        const th = threads[index];
+        const area = document.getElementById('content-area');
+
+        let html = `<span class="back-link" onclick="showBoardTop()">■ 板のトップに戻る</span>`;
+        html += `<div class="thread-view">`;
+        html += `<h1 class="thread-title">${th.title}</h1>`;
+        
+        th.posts.forEach((p, i) => {
+            // 表示時にURLを解析
+            const displayMsg = parseMessage(p.msg);
+            html += `
+                <div class="post">
+                    <div class="meta">${i + 1} 名前：<b>${p.name}</b> ：${p.date} ID:${p.id}</div>
+                    <div class="message">${displayMsg}</div>
+                </div>
+            `;
+        });
+
+        html += `
+            <div class="form-container">
+                <div class="form-row">
+                    <button class="submit-btn" onclick="addReply(${index})">書き込む</button>
+                    名前：<input type="text" id="re-name" placeholder=""> 
+                </div>
+                <textarea id="re-msg" placeholder=""></textarea>
+            </div>
+        </div>`;
+        area.innerHTML = html;
+        window.scrollTo(0,0);
+    }
+
+    function createNewThread() {
+        const title = document.getElementById('new-title').value;
+        const msg = document.getElementById('new-msg').value;
+        if (!title || !msg) return alert("入力していません");
+
+        const name = document.getElementById('new-name').value || "以下、名無しにかわりましてVIPがお送りします";
+        threads.push({
+            title: title,
+            posts: [{ name: name, msg: msg, id: myID, date: getNow() }]
+        });
+        saveData();
+        showThread(threads.length - 1);
+    }
+
+    function addReply(index) {
+        const msg = document.getElementById('re-msg').value;
+        if (!msg) return;
+
+        const name = document.getElementById('re-name').value || "以下、名無しにかわりましてVIPがお送りします";
+        threads[index].posts.push({ name: name, msg: msg, id: myID, date: getNow() });
+        saveData();
+        showThread(index);
+    }
+
+    function getNow() {
+        const n = new Date();
+        const days = ["日","月","火","水","木","金","土"];
+        const comma = String(n.getMilliseconds() % 100).padStart(2, '0');
+        return `${n.getFullYear()}/${n.getMonth()+1}/${n.getDate()}(${days[n.getDay()]}) ${String(n.getHours()).padStart(2,'0')}:${String(n.getMinutes()).padStart(2,'0')}:${String(n.getSeconds()).padStart(2,'0')}.${comma}`;
+    }
+
+    showBoardTop();
+</script>
+
+</body>
+</html>
