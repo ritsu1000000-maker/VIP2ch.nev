@@ -36,8 +36,23 @@
         }
         .rule-title { font-weight: bold; color: #CC3300; font-size: 1.1em; border-bottom: 1px solid #77aa77; margin-bottom: 5px; }
 
-        .thread-list-box { background: rgba(255,255,255,0.9); border: 1px solid #ccc; padding: 15px; margin-bottom: 20px; }
-        .thread-link { display: block; color: #0000ff; margin: 5px 0; cursor: pointer; text-decoration: underline; font-size: 0.95em; }
+        /* --- スレッド一覧を横並びにする設定 --- */
+        .thread-list-box { 
+            background: rgba(255,255,255,0.9); 
+            border: 1px solid #ccc; 
+            padding: 15px; 
+            margin-bottom: 20px;
+            line-height: 1.8; /* 行間に余裕を持たせる */
+        }
+        .thread-link { 
+            display: inline-block; /* 横に並べる */
+            color: #0000ff; 
+            margin: 0 10px 0 0; 
+            cursor: pointer; 
+            text-decoration: underline; 
+            font-size: 0.95em; 
+            white-space: nowrap; /* スレタイ内での変な改行を防ぐ */
+        }
         .thread-link:hover { color: #ff0000; background: #ffffcc; }
 
         .thread-view { background: rgba(255,255,255,0.95); border: 1px solid #999; padding: 20px; min-height: 400px; }
@@ -67,18 +82,14 @@
 <script>
     const boardName = "ニュース速報(VIP)";
     
-    // --- 日付が変わると自動で変わるID生成ロジック ---
     function generateID() {
         const n = new Date();
         const dateStr = n.getFullYear() + "-" + (n.getMonth() + 1) + "-" + n.getDate();
-        
         let userSalt = localStorage.getItem('vip_user_salt');
         if (!userSalt) {
             userSalt = Math.random().toString(36).substring(2, 10);
             localStorage.setItem('vip_user_salt', userSalt);
         }
-
-        // 日付とユーザー固有値を混ぜてIDを作成
         const seed = dateStr + userSalt;
         let hash = 0;
         for (let i = 0; i < seed.length; i++) {
@@ -94,7 +105,7 @@
         try {
             localStorage.setItem('vip_threads_ext', JSON.stringify(threads));
         } catch (e) {
-            console.error("保存に失敗しました");
+            console.error("保存失敗");
         }
     }
 
@@ -130,8 +141,9 @@
         if (threads.length === 0) {
             html += `<p style="font-size:0.85em; color:#666;">まだスレッドがありません。</p>`;
         } else {
+            // スレッドをリンクとして描画
             threads.forEach((th, i) => {
-                html += `<a class="thread-link" onclick="showThread(${i})">${i + 1}: ${th.title} (${th.posts.length})</a>`;
+                html += `<a class="thread-link" onclick="showThread(${i})">${i + 1}: ${th.title} (${th.posts.length})</a> `;
             });
         }
         html += `</div>`;
@@ -146,27 +158,37 @@
             </div>
         `;
         area.innerHTML = html;
+        
+        // --- 6行制限のチェック ---
+        // 描画した後に高さを確認し、6行（おおよそ120px〜150px程度）を超えていたら古いスレを削除
+        const listContainer = document.querySelector('.thread-list-box');
+        if (listContainer && threads.length > 0) {
+            // 1行の高さを30pxと仮定して、180px(6行)を超えたら最古のスレッドを削除して再描画
+            // 厳密な行数判定は難しいので、溢れた場合に古い順に消すロジック
+            if (listContainer.scrollHeight > 200) { 
+                threads.shift(); // 一番古いスレを削除
+                saveData();
+                showBoardTop(); // 再描画
+            }
+        }
+
         window.scrollTo(0,0);
     }
 
     function showThread(index) {
         const th = threads[index];
         const area = document.getElementById('content-area');
-
         let html = `<span class="back-link" onclick="showBoardTop()">■ 板のトップに戻る</span>`;
         html += `<div class="thread-view">`;
         html += `<h1 class="thread-title">${th.title}</h1>`;
-        
         th.posts.forEach((p, i) => {
-            const displayMsg = parseMessage(p.msg);
             html += `
                 <div class="post">
                     <div class="meta">${i + 1} 名前：<b>${p.name}</b> ：${p.date} ID:${p.id}</div>
-                    <div class="message">${displayMsg}</div>
+                    <div class="message">${parseMessage(p.msg)}</div>
                 </div>
             `;
         });
-
         html += `
             <div class="form-container">
                 <div class="form-row">
@@ -184,20 +206,18 @@
         const title = document.getElementById('new-title').value;
         const msg = document.getElementById('new-msg').value;
         if (!title || !msg) return alert("入力が足りません");
-
         const name = document.getElementById('new-name').value || "以下、名無しにかわりましてVIPがお送りします";
         threads.push({
             title: title,
             posts: [{ name: name, msg: msg, id: generateID(), date: getNow() }]
         });
         saveData();
-        showThread(threads.length - 1);
+        showBoardTop(); // 一覧に戻る
     }
 
     function addReply(index) {
         const msg = document.getElementById('re-msg').value;
         if (!msg) return;
-
         const name = document.getElementById('re-name').value || "以下、名無しにかわりましてVIPがお送りします";
         threads[index].posts.push({ name: name, msg: msg, id: generateID(), date: getNow() });
         saveData();
@@ -207,8 +227,7 @@
     function getNow() {
         const n = new Date();
         const days = ["日","月","火","水","木","金","土"];
-        const ms = String(n.getMilliseconds() % 100).padStart(2, '0');
-        return `${n.getFullYear()}/${n.getMonth()+1}/${n.getDate()}(${days[n.getDay()]}) ${String(n.getHours()).padStart(2,'0')}:${String(n.getMinutes()).padStart(2,'0')}:${String(n.getSeconds()).padStart(2,'0')}.${ms}`;
+        return `${n.getFullYear()}/${n.getMonth()+1}/${n.getDate()}(${days[n.getDay()]}) ${String(n.getHours()).padStart(2,'0')}:${String(n.getMinutes()).padStart(2,'0')}:${String(n.getSeconds()).padStart(2,'0')}.${String(n.getMilliseconds() % 100).padStart(2, '0')}`;
     }
 
     showBoardTop();
