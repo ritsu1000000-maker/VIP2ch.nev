@@ -1,1 +1,334 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <title>Auto Access Launcher</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        body {
+            font-family: 'Segoe UI', sans-serif;
+            background: radial-gradient(circle at top, #1a1a1a, #000);
+            color: #e0e0e0;
+            text-align: center;
+            padding-top: 20px;
+            font-size: 12px;
+        }
+        h1 {
+            font-size: 1.6rem;
+            color: #00eaff;
+            text-shadow: 0 0 6px #00eaff;
+            margin-bottom: 8px;
+        }
+        .panel {
+            width: 70%;
+            margin: 0 auto;
+            padding: 12px;
+            background: rgba(255,255,255,0.04);
+            border-radius: 10px;
+            backdrop-filter: blur(6px);
+            border: 1px solid rgba(255,255,255,0.06);
+            box-shadow: 0 0 10px rgba(0,255,255,0.10);
+        }
+        input, textarea {
+            width: 55%;
+            padding: 6px;
+            border-radius: 6px;
+            border: none;
+            outline: none;
+            font-size: 12px;
+            background: rgba(255,255,255,0.06);
+            color: #fff;
+            border: 1px solid rgba(255,255,255,0.08);
+            margin-top: 6px;
+        }
+        textarea { height: 60px; resize: vertical; }
+        .method-toggle {
+            display: inline-flex;
+            gap: 6px;
+            margin-top: 6px;
+        }
+        .method-btn {
+            padding: 6px 10px;
+            border-radius: 6px;
+            border: none;
+            cursor: pointer;
+            font-size: 12px;
+            color: #000;
+            background: #444;
+            box-shadow: 0 0 6px rgba(0,0,0,0.4);
+        }
+        .method-btn.active-get { background: #00eaff; box-shadow: 0 0 8px #00eaff; }
+        .method-btn.active-post { background: #ffae00; box-shadow: 0 0 8px #ffae00; }
+        button {
+            padding: 6px 12px;
+            margin-left: 5px;
+            cursor: pointer;
+            border: none;
+            border-radius: 6px;
+            font-size: 12px;
+            color: #000;
+            background: #00eaff;
+            box-shadow: 0 0 6px #00eaff;
+            transition: 0.15s;
+        }
+        button:hover { transform: scale(1.03); }
+        .stop-btn { background: #ff3b3b; box-shadow: 0 0 6px #ff3b3b; color:#fff; }
+        .clear-btn { background: #ffae00; box-shadow: 0 0 6px #ffae00; color:#000; }
+        #metaNote { margin-top: 8px; font-size: 11px; color: #bfefff; text-shadow: 0 0 3px #00eaff; }
+        #statusRow { display:flex; justify-content:center; gap:8px; align-items:center; margin-top:8px; flex-wrap:wrap; }
+        .badge {
+            padding: 4px 8px;
+            border-radius: 999px;
+            font-size: 11px;
+            color: #000;
+            background: #ccc;
+        }
+        .badge-get { background: #00eaff; color:#000; box-shadow:0 0 6px #00eaff; }
+        .badge-post { background: #ffae00; color:#000; box-shadow:0 0 6px #ffae00; }
+        #status, #countdown, #clock, #urlStatus { font-size: 12px; text-shadow: 0 0 4px #000; }
+        iframe {
+            width: 85%;
+            height: 320px;
+            margin-top: 12px;
+            border-radius: 8px;
+            border: 1px solid #00eaff;
+            box-shadow: 0 0 12px rgba(0,255,255,0.12);
+            background: #fff;
+        }
+        #responseChart { max-width: 260px; margin: 8px auto; }
+        #logBox {
+            width: 80%;
+            height: 100px;
+            margin: 8px auto;
+            padding: 6px;
+            background: rgba(255,255,255,0.03);
+            border-radius: 8px;
+            overflow-y: auto;
+            font-size: 11px;
+            border: 1px solid rgba(255,255,255,0.06);
+            text-align:left;
+        }
+        .log-get { color:#00eaff; }
+        .log-post { color:#ffae00; }
+    </style>
+</head>
+<body>
 
+    <h1>AUTO ACCESS LAUNCHER</h1>
+
+    <div class="panel">
+        <p style="margin:4px 0;">URLを入力し、メソッドを選んで開始してください（5秒に一回更新します）。</p>
+
+        <input type="text" id="urlInput" placeholder="https://example.com">
+
+        <div class="method-toggle" role="tablist" aria-label="method">
+            <button id="btnGet" class="method-btn active-get" onclick="selectMethod('GET')">GET</button>
+            <button id="btnPost" class="method-btn" onclick="selectMethod('POST')">POST</button>
+        </div>
+
+        <textarea id="postData" placeholder="POSTデータ（例: key=value&foo=bar または JSON）"></textarea>
+
+        <div style="margin-top:6px;">
+            <button onclick="startAutoVisit()">開始</button>
+            <button class="stop-btn" onclick="stopAutoVisit()">停止</button>
+            <button class="clear-btn" onclick="clearInfo()">情報クリア</button>
+        </div>
+
+        <div id="statusRow">
+            <div id="urlStatus">URLチェック: -</div>
+            <div id="methodBadge" class="badge badge-get">GET</div>
+            <div id="status">停止中</div>
+            <div id="countdown">次の更新まで: -</div>
+            <div id="clock">現在時刻: -</div>
+        </div>
+
+        <div id="metaNote">※ 5秒に一回更新します</div>
+    </div>
+
+    <iframe id="targetFrame" name="targetFrame" src="about:blank"></iframe>
+
+    <h2 style="color:#00eaff; text-shadow:0 0 6px #00eaff; font-size:14px; margin:8px 0;">応答時間グラフ</h2>
+    <canvas id="responseChart" width="250" height="80"></canvas>
+
+    <div id="logBox"></div>
+
+    <script>
+        let timer = null;
+        let countdownTimer = null;
+        let count = 0;
+        let intervalSec = 5;
+        let startTime = 0;
+        let currentMethod = 'GET';
+
+        function selectMethod(m) {
+            currentMethod = m;
+            document.getElementById('methodBadge').innerText = m;
+            const badge = document.getElementById('methodBadge');
+            if (m === 'GET') {
+                badge.className = 'badge badge-get';
+                document.getElementById('btnGet').classList.add('active-get');
+                document.getElementById('btnPost').classList.remove('active-post');
+                document.getElementById('btnPost').classList.remove('active-get');
+            } else {
+                badge.className = 'badge badge-post';
+                document.getElementById('btnPost').classList.add('active-post');
+                document.getElementById('btnGet').classList.remove('active-get');
+                document.getElementById('btnGet').classList.remove('active-post');
+            }
+        }
+
+        const ctx = document.getElementById('responseChart').getContext('2d');
+        const responseChart = new Chart(ctx, {
+            type: 'line',
+            data: {
+                labels: [],
+                datasets: [
+                    { label: 'GET 応答時間 (ms)', data: [], borderColor: '#00eaff', backgroundColor: 'rgba(0,234,255,0.12)', borderWidth:1, tension:0.3, pointRadius:2 },
+                    { label: 'POST 応答時間 (ms)', data: [], borderColor: '#ffae00', backgroundColor: 'rgba(255,174,0,0.12)', borderWidth:1, tension:0.3, pointRadius:2 }
+                ]
+            },
+            options: {
+                plugins: { legend: { labels: { font: { size: 10 } } } },
+                scales: { x: { ticks: { font: { size: 8 } } }, y: { ticks: { font: { size: 8 } } } }
+            }
+        });
+
+        document.getElementById('targetFrame').addEventListener('load', () => {
+            const endTime = performance.now();
+            const responseTime = Math.round(endTime - startTime);
+            const now = new Date().toLocaleTimeString();
+
+            // ラベルは共通軸。両データセットに対して空白を埋めるルール
+            responseChart.data.labels.push(now);
+
+            if (currentMethod === 'GET') {
+                responseChart.data.datasets[0].data.push(responseTime);
+                responseChart.data.datasets[1].data.push(null);
+            } else {
+                responseChart.data.datasets[1].data.push(responseTime);
+                responseChart.data.datasets[0].data.push(null);
+            }
+
+            // 最新50件だけ保持（各データセットの長さを揃える）
+            if (responseChart.data.labels.length > 50) {
+                responseChart.data.labels.shift();
+                responseChart.data.datasets.forEach(ds => ds.data.shift());
+            }
+
+            responseChart.update();
+            log(responseTime + "ms (" + currentMethod + ")", currentMethod);
+        });
+
+        function startAutoVisit() {
+            const url = document.getElementById('urlInput').value;
+            const postData = document.getElementById('postData').value;
+            if (!url.startsWith('http')) {
+                alert("URLは http:// または https:// から入力してください！");
+                document.getElementById('urlStatus').innerText = "URLチェック: ❌ 無効";
+                return;
+            }
+            document.getElementById('urlStatus').innerText = "URLチェック: ✅ 有効";
+            stopAutoVisit();
+            count = 0;
+            document.getElementById('status').innerText = "実行中...（5秒に一回更新）";
+            log("開始: " + url + " [" + currentMethod + "]", currentMethod);
+            sendRequest(url, currentMethod, postData);
+            startCountdown();
+            timer = setInterval(() => {
+                count++;
+                sendRequest(url, currentMethod, postData);
+                document.getElementById('status').innerText = count + "回目のアクセス完了";
+                log(count + "回目のアクセス", currentMethod);
+                startCountdown();
+            }, intervalSec * 1000);
+        }
+
+        function sendRequest(url, method, postData) {
+            startTime = performance.now();
+            const frame = document.getElementById('targetFrame');
+            if (method === "GET") {
+                frame.src = url + "?t=" + new Date().getTime();
+            } else {
+                const form = document.createElement("form");
+                form.method = "POST";
+                form.action = url;
+                form.target = "targetFrame";
+                try {
+                    if (postData.trim().startsWith("{")) {
+                        const json = JSON.parse(postData);
+                        for (let key in json) {
+                            const input = document.createElement("input");
+                            input.type = "hidden";
+                            input.name = key;
+                            input.value = json[key];
+                            form.appendChild(input);
+                        }
+                    } else {
+                        const params = new URLSearchParams(postData);
+                        for (let [key, value] of params.entries()) {
+                            const input = document.createElement("input");
+                            input.type = "hidden";
+                            input.name = key;
+                            input.value = value;
+                            form.appendChild(input);
+                        }
+                    }
+                } catch {
+                    alert("POSTデータの形式が不正です");
+                    return;
+                }
+                document.body.appendChild(form);
+                form.submit();
+                form.remove();
+            }
+        }
+
+        function stopAutoVisit() {
+            if (timer) clearInterval(timer);
+            if (countdownTimer) clearInterval(countdownTimer);
+            document.getElementById('status').innerText = "停止しました";
+            document.getElementById('countdown').innerText = "-";
+            log("停止しました", currentMethod);
+        }
+
+        function startCountdown() {
+            let sec = intervalSec;
+            const countdown = document.getElementById('countdown');
+            if (countdownTimer) clearInterval(countdownTimer);
+            countdownTimer = setInterval(() => {
+                countdown.innerText = "次の更新まで: " + sec + "秒";
+                sec--;
+                if (sec < 0) clearInterval(countdownTimer);
+            }, 1000);
+        }
+
+        function log(text, method) {
+            const box = document.getElementById('logBox');
+            const time = new Date().toLocaleTimeString();
+            const cls = method === 'POST' ? 'log-post' : 'log-get';
+            box.innerHTML += "[" + time + "] <span class='" + cls + "'>" + text + "</span><br>";
+            box.scrollTop = box.scrollHeight;
+        }
+
+        function clearInfo() {
+            document.getElementById('logBox').innerHTML = "";
+            document.getElementById('status').innerText = "停止中";
+            document.getElementById('countdown').innerText = "-";
+            document.getElementById('urlStatus').innerText = "URLチェック: -";
+            responseChart.data.labels = [];
+            responseChart.data.datasets.forEach(ds => ds.data = []);
+            responseChart.update();
+            count = 0;
+            log("情報をクリアしました", currentMethod);
+        }
+
+        setInterval(() => {
+            document.getElementById('clock').innerText = new Date().toLocaleTimeString();
+        }, 1000);
+
+        // 初期メソッド表示
+        selectMethod('GET');
+    </script>
+
+</body>
+</html>
